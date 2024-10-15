@@ -243,4 +243,5 @@ const handleRoomDisconnection = (room) => {
         }
     };
 
-    form.addEventListener("submit", startRoom);
+};
+form.addEventListener("submit", startRoom)
