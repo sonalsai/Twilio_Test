@@ -8,8 +8,6 @@ let room;
 const activeParticipants = new Map();
 let isWebSocketReady = false;
 
-let audioChunks = []; // To store the received audio data
-
 const startRoom = async (event) => {
     event.preventDefault();
     form.style.visibility = "hidden";
@@ -36,8 +34,6 @@ const startRoom = async (event) => {
         // Join video room
         room = await joinVideoRoom(roomName, token);
         console.log(`Joined room: ${room.name}`);
-
-        console.log("Room", room)
 
         // Render local and remote participants
         handleConnectedParticipant(room.localParticipant);
@@ -78,19 +74,18 @@ const handleConnectedParticipant = (participant) => {
 
         console.log(participant);
 
-        // For remote participants, subscribe to their tracks
         participant.tracks.forEach((trackPublication) => {
             handleTrackPublication(trackPublication, participant);
         });
 
-        participant.on("trackPublished", (trackPublication) =>
+        participant.on("trackPublished", (trackPublication) => 
             handleTrackPublication(trackPublication, participant));
 
         participant.on("trackSubscribed", (track) => {
             console.log(`Track subscribed: ${track.kind}`);
             if (track.kind === 'audio') {
                 console.log(`Starting audio recording for ${participant.identity}`);
-                const mediaRecorder = sendAudioToWebSocket(track, participant);
+                const mediaRecorder = sendAudioToWebSocket(track);
                 activeParticipants.set(participant.identity, mediaRecorder);
             }
         });
@@ -105,31 +100,10 @@ const handleConnectedParticipant = (participant) => {
                 }
             }
         });
-
-        // For local participant, ensure that their audio is also captured
-        if (participant === room.localParticipant) {
-            console.log(`Handling local participant's audio tracks`);
-            participant.tracks.forEach((trackPublication) => {
-                if (trackPublication.track.kind === 'audio') {
-                    console.log("THE LOCAL KIND GOT")
-                    const mediaRecorder = sendAudioToWebSocket(trackPublication.track, participant);
-                    activeParticipants.set(participant.identity, mediaRecorder);
-                }
-            });
-
-            // In case a new audio track is published by the local participant
-            participant.on("trackPublished", (trackPublication) => {
-                if (trackPublication.track.kind === 'audio') {
-                    const mediaRecorder = sendAudioToWebSocket(trackPublication.track, participant);
-                    activeParticipants.set(participant.identity, mediaRecorder);
-                }
-            });
-        }
     } catch (error) {
         console.error("Error handling connected participant:", error);
     }
 };
-
 
 const handleTrackPublication = (trackPublication, participant) => {
     try {
@@ -173,7 +147,6 @@ const sendAudioToWebSocket = (audioTrack) => {
             console.log("on data");
             if (event.data.size > 0) {
                 console.log("Captured audio chunk size:", event.data.size);
-                audioChunks.push(event.data); // Store the audio data
                 if (isWebSocketReady) {
                     socket.send(event.data);
                     console.log("Audio data sent to WebSocket");
@@ -188,15 +161,6 @@ const sendAudioToWebSocket = (audioTrack) => {
         mediaRecorder.onerror = (error) => {
             console.error("MediaRecorder error:", error);
         };
-
-        // Play the audio as it's being recorded
-        // const audioElement = document.createElement('audio');
-        // audioElement.controls = true;  // Add controls to the audio element
-        // document.body.appendChild(audioElement); // Append to the body or a container
-
-        // const audioStream = new MediaStream([audioTrack.mediaStreamTrack]);
-        // audioElement.srcObject = audioStream;  // Link the MediaStream to the audio element
-        // audioElement.play();  // Start playing the audio
 
         mediaRecorder.start(1000);  // Capture audio every second
         console.log("MediaRecorder started");
@@ -237,7 +201,7 @@ const handleDisconnectedParticipant = (participant) => {
         participant.removeAllListeners();
         const participantDiv = document.getElementById(participant.identity);
         participantDiv.remove();
-
+        
         const mediaRecorder = activeParticipants.get(participant.identity);
         if (mediaRecorder) {
             mediaRecorder.stop();
@@ -265,29 +229,6 @@ const handleRoomDisconnection = (room) => {
     }
 
     room.disconnect();
-};
-
-// Function to play the recorded audio chunks after the call ends
-const playReceivedAudio = () => {
-    if (audioChunks.length > 0) {
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        const audioURL = URL.createObjectURL(blob);
-        const audioElement = new Audio(audioURL);
-
-        audioElement.addEventListener('ended', () => {
-            console.log("Playback finished");
-        });
-
-        audioElement.play()
-            .then(() => {
-                console.log("Audio is playing...");
-            })
-            .catch((error) => {
-                console.error("Error playing the audio:", error);
-            });
-    } else {
-        console.log("No audio data to play");
-    }
 };
 
 const joinVideoRoom = async (roomName, token) => {
