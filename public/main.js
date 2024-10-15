@@ -8,6 +8,8 @@ let room;
 const activeParticipants = new Map();
 let isWebSocketReady = false;
 
+let audioChunks = []; // To store the received audio data
+
 const startRoom = async (event) => {
     event.preventDefault();
     form.style.visibility = "hidden";
@@ -78,7 +80,7 @@ const handleConnectedParticipant = (participant) => {
             handleTrackPublication(trackPublication, participant);
         });
 
-        participant.on("trackPublished", (trackPublication) => 
+        participant.on("trackPublished", (trackPublication) =>
             handleTrackPublication(trackPublication, participant));
 
         participant.on("trackSubscribed", (track) => {
@@ -147,6 +149,7 @@ const sendAudioToWebSocket = (audioTrack) => {
             console.log("on data");
             if (event.data.size > 0) {
                 console.log("Captured audio chunk size:", event.data.size);
+                audioChunks.push(event.data); // Store the audio data
                 if (isWebSocketReady) {
                     socket.send(event.data);
                     console.log("Audio data sent to WebSocket");
@@ -201,7 +204,7 @@ const handleDisconnectedParticipant = (participant) => {
         participant.removeAllListeners();
         const participantDiv = document.getElementById(participant.identity);
         participantDiv.remove();
-        
+
         const mediaRecorder = activeParticipants.get(participant.identity);
         if (mediaRecorder) {
             mediaRecorder.stop();
@@ -229,16 +232,15 @@ const handleRoomDisconnection = (room) => {
     }
 
     room.disconnect();
-};
 
-const joinVideoRoom = async (roomName, token) => {
-    try {
-        console.log(`Attempting to join room: ${roomName}`);
-        return await Twilio.Video.connect(token, { room: roomName });
-    } catch (error) {
-        console.error("Error joining video room:", error);
-        throw error;
-    }
-};
+    const joinVideoRoom = async (roomName, token) => {
+        try {
+            console.log(`Attempting to join room: ${roomName}`);
+            return await Twilio.Video.connect(token, { room: roomName });
+        } catch (error) {
+            console.error("Error joining video room:", error);
+            throw error;
+        }
+    };
 
-form.addEventListener("submit", startRoom);
+    form.addEventListener("submit", startRoom);
