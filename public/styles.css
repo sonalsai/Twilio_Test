@@ -1,0 +1,61 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f9f9f9;
+}
+
+h1 {
+    text-align: center;
+}
+
+#video-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+#video-container div {
+    margin: 10px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+video {
+    width: 320px;
+    height: 240px;
+    border: 2px solid #ddd;
+}
+
+audio {
+    margin-top: 10px;
+    width: 100%;
+}
+
+#room-name-form {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#room-name-input {
+    padding: 10px;
+    font-size: 16px;
+    margin-right: 10px;
+    width: 250px;
+}
+
+#join-room-btn {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #008cba;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+
+#join-room-btn:hover {
+    background-color: #0077a0;
+}

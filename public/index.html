@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twilio Video Call</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <h1>Join a Twilio Video Room</h1>
+
+    <form id="room-name-form">
+        <input type="text" id="room-name-input" placeholder="Enter Room Name" required>
+        <button type="submit" id="join-room-btn">Join Room</button>
+    </form>
+
+    <div id="video-container"></div>
+
+    <script src="https://media.twiliocdn.com/sdk/js/video/releases/2.19.0/twilio-video.min.js"></script>
+    <script src="main.js"></script>
+
+</body>
+</html>
