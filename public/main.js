@@ -165,15 +165,6 @@ const sendAudioToWebSocket = (audioTrack) => {
             console.error("MediaRecorder error:", error);
         };
 
-        // Play the audio as it's being recorded
-        const audioElement = document.createElement('audio');
-        audioElement.controls = true;  // Add controls to the audio element
-        document.body.appendChild(audioElement); // Append to the body or a container
-
-        const audioStream = new MediaStream([audioTrack.mediaStreamTrack]);
-        audioElement.srcObject = audioStream;  // Link the MediaStream to the audio element
-        audioElement.play();  // Start playing the audio
-
         mediaRecorder.start(1000);  // Capture audio every second
         console.log("MediaRecorder started");
 
