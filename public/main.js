@@ -7,8 +7,10 @@ let socket;
 let room;
 const activeParticipants = new Map();
 let isWebSocketReady = false;
-
-let audioChunks = []; // To store the received audio data
+let prevText = "";
+let combinedMediaStream;  // To hold combined local and remote streams
+let localMediaStream;     // To hold the local microphone stream
+let mediaRecorder;
 
 const startRoom = async (event) => {
     event.preventDefault();
@@ -37,21 +39,23 @@ const startRoom = async (event) => {
         room = await joinVideoRoom(roomName, token);
         console.log(`Joined room: ${room.name}`);
 
-        // Render local and remote participants
+        // Capture local microphone stream
+        await captureLocalMicrophone();
+
+        // Handle participants
         handleConnectedParticipant(room.localParticipant);
         room.participants.forEach(handleConnectedParticipant);
         room.on("participantConnected", handleConnectedParticipant);
 
         // Handle disconnections
         room.on("participantDisconnected", handleDisconnectedParticipant);
-        window.addEventListener("pagehide", () => handleRoomDisconnection(room));
-        window.addEventListener("beforeunload", () => handleRoomDisconnection(room));
 
-        // WebSocket connection
+        // Set up WebSocket
         socket = new WebSocket(WS_URL);
         socket.onopen = () => {
             console.log("WebSocket connected");
             isWebSocketReady = true;
+            startRecording();  // Start streaming after WebSocket is ready
         };
         socket.onmessage = (event) => {
             console.log("Received WebSocket message:", event.data);
@@ -67,6 +71,20 @@ const startRoom = async (event) => {
     }
 };
 
+// Capture local microphone stream
+const captureLocalMicrophone = async () => {
+    try {
+        localMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Local microphone captured");
+        if (!combinedMediaStream) {
+            combinedMediaStream = new MediaStream();
+        }
+        localMediaStream.getAudioTracks().forEach(track => combinedMediaStream.addTrack(track));
+    } catch (error) {
+        console.error("Error capturing local microphone:", error);
+    }
+};
+
 const handleConnectedParticipant = (participant) => {
     try {
         console.log(`Participant connected: ${participant.identity}`);
@@ -74,32 +92,25 @@ const handleConnectedParticipant = (participant) => {
         participantDiv.setAttribute("id", participant.identity);
         container.appendChild(participantDiv);
 
-        console.log(participant);
-
         participant.tracks.forEach((trackPublication) => {
             handleTrackPublication(trackPublication, participant);
         });
 
-        participant.on("trackPublished", (trackPublication) => 
-            handleTrackPublication(trackPublication, participant));
+        participant.on("trackPublished", (trackPublication) =>
+            handleTrackPublication(trackPublication, participant)
+        );
 
         participant.on("trackSubscribed", (track) => {
-            console.log(`Track subscribed: ${track.kind}`);
             if (track.kind === 'audio') {
-                console.log(`Starting audio recording for ${participant.identity}`);
-                const mediaRecorder = sendAudioToWebSocket(track);
-                activeParticipants.set(participant.identity, mediaRecorder);
+                console.log(`Starting real-time audio stream for ${participant.identity}`);
+                addRemoteAudioToStream(track);
             }
         });
 
         participant.on("trackUnsubscribed", (track) => {
             if (track.kind === 'audio') {
-                console.log(`Stopping audio recording for ${participant.identity}`);
-                const mediaRecorder = activeParticipants.get(participant.identity);
-                if (mediaRecorder) {
-                    mediaRecorder.stop();
-                    activeParticipants.delete(participant.identity);
-                }
+                console.log(`Stopping real-time audio stream for ${participant.identity}`);
+                removeRemoteAudioFromStream(track);
             }
         });
     } catch (error) {
@@ -109,7 +120,6 @@ const handleConnectedParticipant = (participant) => {
 
 const handleTrackPublication = (trackPublication, participant) => {
     try {
-        console.log(`Track published: ${trackPublication.kind}`);
         if (trackPublication.track) {
             displayTrack(trackPublication.track, participant);
         }
@@ -125,39 +135,74 @@ const displayTrack = (track, participant) => {
         participantDiv.append(track.attach());
         if (track.kind === 'audio') {
             console.log(`Audio track attached for ${participant.identity}`);
-            // Add a visual indicator for audio capture (optional)
         }
     } catch (error) {
         console.error("Error displaying track:", error);
     }
 };
 
-const sendAudioToWebSocket = (audioTrack) => {
+// Add remote audio track to the combined media stream
+const addRemoteAudioToStream = (audioTrack) => {
     try {
-        const mediaStream = new MediaStream();
-        mediaStream.addTrack(audioTrack.mediaStreamTrack);
+        if (!combinedMediaStream) {
+            combinedMediaStream = new MediaStream();
+        }
+        combinedMediaStream.addTrack(audioTrack.mediaStreamTrack);
+        console.log("Remote audio added to combined stream");
+
+        // Restart the recording with the updated combined stream
+        restartRecording();
+    } catch (error) {
+        console.error("Error adding remote audio track:", error);
+    }
+};
+
+// Remove remote audio track from the combined media stream
+const removeRemoteAudioFromStream = (audioTrack) => {
+    try {
+        combinedMediaStream.removeTrack(audioTrack.mediaStreamTrack);
+        console.log("Remote audio removed from combined stream");
+
+        // Restart the recording with the updated combined stream
+        restartRecording();
+    } catch (error) {
+        console.error("Error removing remote audio track:", error);
+    }
+};
+
+// Stop the existing mediaRecorder and start a new one with the updated combined stream
+const restartRecording = () => {
+    try {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();  // Stop the existing recording
+            console.log("Stopped existing media recorder");
+        }
+
+        startRecording();  // Start a new recording with the updated stream
+    } catch (error) {
+        console.error("Error restarting the recording:", error);
+    }
+};
+
+// Start recording the combined stream and sending it to the WebSocket
+const startRecording = () => {
+    try {
+        if (!combinedMediaStream) {
+            console.error("No combined stream available to record");
+            return;
+        }
 
         const options = { mimeType: "audio/webm" };
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
             throw new Error(`Unsupported MIME type: ${options.mimeType}`);
         }
 
-        const mediaRecorder = new MediaRecorder(mediaStream, options);
-        console.log(mediaRecorder);
+        mediaRecorder = new MediaRecorder(combinedMediaStream, options);
 
         mediaRecorder.ondataavailable = (event) => {
-            console.log("on data");
-            if (event.data.size > 0) {
-                console.log("Captured audio chunk size:", event.data.size);
-                audioChunks.push(event.data); // Store the audio data
-                if (isWebSocketReady) {
-                    socket.send(event.data);
-                    console.log("Audio data sent to WebSocket");
-                } else {
-                    console.warn("WebSocket is not ready, cannot send data");
-                }
-            } else {
-                console.warn("Captured audio data is empty");
+            if (event.data.size > 0 && isWebSocketReady) {
+                socket.send(event.data);
+                console.log("Real-time audio data sent to WebSocket");
             }
         };
 
@@ -165,23 +210,18 @@ const sendAudioToWebSocket = (audioTrack) => {
             console.error("MediaRecorder error:", error);
         };
 
-        mediaRecorder.start(1000);  // Capture audio every second
-        console.log("MediaRecorder started");
-
-        return mediaRecorder;
+        mediaRecorder.start(1000);  // Stream audio every second
+        console.log("Recording combined stream and sending to WebSocket");
     } catch (error) {
-        console.error("Error in sendAudioToWebSocket:", error);
+        console.error("Error starting recording:", error);
     }
 };
 
+
 const handleWebSocketMessage = (event) => {
     try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'transcription') {
-            displayTranscription(data);
-        } else {
-            console.log("Received unknown message type:", data.type);
-        }
+        const data = event.data;
+        displayTranscription(data);
     } catch (error) {
         console.error("Error parsing WebSocket message:", error);
     }
@@ -189,10 +229,9 @@ const handleWebSocketMessage = (event) => {
 
 const displayTranscription = (transcription) => {
     try {
-        const participantDiv = document.getElementById(transcription.participant);
-        const transcriptionElement = document.createElement("p");
-        transcriptionElement.textContent = transcription.text;
-        participantDiv.appendChild(transcriptionElement);
+        prevText = prevText + transcription;
+        const participantDiv = document.getElementById("transcription-text");
+        participantDiv.innerText = prevText;
     } catch (error) {
         console.error("Error displaying transcription:", error);
     }
@@ -201,10 +240,9 @@ const displayTranscription = (transcription) => {
 const handleDisconnectedParticipant = (participant) => {
     try {
         console.log(`Participant disconnected: ${participant.identity}`);
-        participant.removeAllListeners();
         const participantDiv = document.getElementById(participant.identity);
         participantDiv.remove();
-        
+
         const mediaRecorder = activeParticipants.get(participant.identity);
         if (mediaRecorder) {
             mediaRecorder.stop();
@@ -213,26 +251,6 @@ const handleDisconnectedParticipant = (participant) => {
     } catch (error) {
         console.error("Error handling disconnected participant:", error);
     }
-};
-
-const handleRoomDisconnection = (room) => {
-    console.log("Disconnecting from room");
-    room.localParticipant.tracks.forEach(publication => {
-        publication.track.stop();
-        publication.unpublish();
-    });
-
-    activeParticipants.forEach(mediaRecorder => {
-        mediaRecorder.stop();
-    });
-    activeParticipants.clear();
-
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.close();
-    }
-
-    room.disconnect();
-
 };
 
 const joinVideoRoom = async (roomName, token) => {

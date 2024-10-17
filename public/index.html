@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Twilio Video Call</title>
+    <title>Twilio Video Call with Transcription</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
 
     <h1>Join a Twilio Video Room</h1>
@@ -15,10 +17,18 @@
         <button type="submit" id="join-room-btn">Join Room</button>
     </form>
 
+    <!-- Container for displaying the participants' videos -->
     <div id="video-container"></div>
 
+    <!-- Container for displaying the transcription -->
+    <div id="transcription-text">
+        
+    </div>
+
+    <!-- Include the Twilio Video SDK -->
     <script src="https://media.twiliocdn.com/sdk/js/video/releases/2.19.0/twilio-video.min.js"></script>
     <script src="main.js"></script>
 
 </body>
+
 </html>
