@@ -1,4 +1,4 @@
-const WS_URL = `wss://api.aiscribe.quipohealth.com/ws`;
+const WS_URL = ``;
 
 const form = document.getElementById("room-name-form");
 const roomNameInput = document.getElementById("room-name-input");
